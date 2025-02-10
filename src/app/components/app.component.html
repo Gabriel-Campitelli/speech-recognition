@@ -1,7 +1,15 @@
 <div class="container">
-  <button (click)="executeRecognition()">Execute recognition</button>
-  <!-- <button (click)="startRecording()">Start recording</button>
-  <button (click)="stopRecording()">Stop recording</button> -->
+  <button (click)="executeRecognition()" [disabled]="true">
+    Execute recognition
+  </button>
 
-  {{ transcription }}
+  <button (click)="startRecording()">Start recording</button>
+  <button (click)="stopRecording()">Stop recording</button>
+
+  <p>
+    {{ transcription }}
+    <span style="color: red">
+      {{ oldPartialText }}
+    </span>
+  </p>
 </div>
