@@ -6,7 +6,7 @@ import {
   PretrainedOptions,
   env,
 } from '@huggingface/transformers';
-import { Subject, Observable, of, throwError } from 'rxjs';
+import { Subject, from, takeUntil, concatMap, Subscription } from 'rxjs';
 
 @Injectable({
   providedIn: 'root',
@@ -14,183 +14,139 @@ import { Subject, Observable, of, throwError } from 'rxjs';
 export class SpeechRecognitionService {
   private readonly WHISPER_TINY_MODEL_URL =
     '../../..assets/transform-models/whisper-tiny';
-  private SPEECH_RECOGNITION_CONFIG: PretrainedOptions = {
+  private readonly SPEECH_RECOGNITION_SERVICE_CONFIG: PretrainedOptions = {
     cache_dir: this.WHISPER_TINY_MODEL_URL,
     local_files_only: true,
   };
+  private readonly AUTOMATIC_SPEECH_RECOGNITION_CONFIG: AutomaticSpeechRecognitionConfig =
+    {
+      language: 'es', // Forzar reconocimiento en español
+      task: 'transcribe',
+      return_timestamps: 'word',
+      stride_length_s: 1, // Evita cortes bruscos en el audio
+      chunk_length_s: 5, // Procesa en fragmentos de 5 segundos
+    } as AutomaticSpeechRecognitionConfig;
+
+  private shouldRecognize$: Subject<void> = new Subject();
+  private recognitionPipeline: any; // Store the pipeline instance
+  private audioChunks: Float32Array[] = []; // Array para almacenar los chunks
+  recognitionSubscription: Subscription | undefined;
 
   constructor() {
     env.localModelPath = '/assets/transform-models/';
     env.allowLocalModels = true;
   }
 
-  async getResult(audioBuffer?: Float32Array): Promise<Observable<string>> {
+  private async initializePipeline() {
+    if (!this.recognitionPipeline) {
+      // Initialize only once
+      this.recognitionPipeline = await pipeline(
+        'automatic-speech-recognition',
+        'Xenova/whisper-tiny',
+        this.SPEECH_RECOGNITION_SERVICE_CONFIG
+      );
+    }
+  }
+
+  getResult(audioBuffer: Float32Array) {
     if (!audioBuffer) {
       const url = '../../../assets/salvador-sample.wav';
       // audioBuffer = await this.loadWavFile(url);
-      return throwError('Error');
+      // return throwError('Error');
     }
 
-    return this.transcribeWithoutChunks(audioBuffer);
-    // return this.transcribeInChunks(audioBuffer);
+    this.processChunk(audioBuffer);
   }
 
-  reproduceAudio(audioBlob: Blob) {
-    // Crear una URL para reproducir el audio
-    const audioUrl = URL.createObjectURL(audioBlob);
+  processChunk(audioChunk: Float32Array) {
+    this.audioChunks.push(audioChunk); // Añadir el nuevo chunk al array
 
-    // Opcional: reproducir automáticamente
-    const audio = new Audio(audioUrl);
-    audio.play();
+    if (!this.recognitionSubscription) {
+      // Si no hay una suscripción activa, crearla
+      this.startChunkedTranscription();
+    }
   }
 
-  async transcribeWithoutChunks(audio: Float32Array) {
-    const subject = new Subject<string>(); // Emisor de resultados parciales
+  transcriptionSubject$ = new Subject<string>(); // Emisor de resultados parciales
+  async startChunkedTranscription() {
+    this.shouldRecognize$ = new Subject();
+
+    await this.initializePipeline(); // Ensure pipeline is initialized
 
     console.warn('Started processing');
-    pipeline(
-      'automatic-speech-recognition',
-      'Xenova/whisper-tiny',
-      this.SPEECH_RECOGNITION_CONFIG
-    )
-      .then(async (automaticSpeechRecognition) => {
-        try {
-          const config = {
-            language: 'es', // Forzar reconocimiento en español
-            task: 'transcribe',
-            return_timestamps: 'word',
-            stride_length_s: 1, // Evita cortes bruscos en el audio
-            // chunk_length_s: 5, // Procesa en fragmentos de 5 segundos
-          } as AutomaticSpeechRecognitionConfig;
-          console.warn('Processing in progress');
 
-          const result = (await automaticSpeechRecognition(
-            audio,
-            config
-          )) as AutomaticSpeechRecognitionOutput;
+    from(this.audioChunks)
+      .pipe(
+        takeUntil(this.shouldRecognize$),
+        concatMap(async (audioChunk) => {
+          try {
+            // this.reproduceAudio(audioChunk); // Reproduce the current chunk
 
-          await new Promise((resolve) => setTimeout(resolve, 1));
+            console.warn('Processing chunk in progress');
 
-          console.warn('Processing finished');
-          subject.next(result.text); // Emitir resultado parcial
-        } catch (error) {
-          console.error(`Error procesando el audio`, error);
-        }
+            const result = (await this.recognitionPipeline(
+              // Use the stored pipeline
+              audioChunk,
+              this.AUTOMATIC_SPEECH_RECOGNITION_CONFIG
+            )) as AutomaticSpeechRecognitionOutput;
 
-        subject.complete(); // Indica que la transcripción ha terminado
-      })
-
-      .catch((error) => {
-        console.error('Error cargando el modelo de Whisper:', error);
+            console.warn('Chunk processing finished');
+            return result.text; // Return the transcription for this chunk
+          } catch (error) {
+            console.error('Error procesando el chunk', error);
+            this.transcriptionSubject$.error(error);
+            return null;
+          }
+        })
+      )
+      .subscribe({
+        next: (text) => {
+          console.log(text);
+          if (text !== null) {
+            // Check if the chunk processing was successful
+            this.transcriptionSubject$.next(text); // Emit the transcription for the chunk
+          }
+        },
+        error: (error) => {
+          console.error('Transcription error:', error);
+          this.transcriptionSubject$.error(error);
+          this.resetTranscription(); // Reiniciar el estado para el próximo audio
+        },
+        complete: () => {
+          console.warn('All chunks processed.');
+          // this.transcriptionSubject$.complete();
+          this.resetTranscription(); // Reiniciar el estado para el próximo audio
+        },
       });
 
-    return subject.asObservable();
+    // return subject.asObservable();
   }
 
-  // async transcribeInChunks(audioBuffer: AudioBuffer, chunkSizeSec = 10) {
-  //   const subject = new Subject<string>(); // Emisor de resultados parciales
+  cancelTranscription() {
+    if (this.shouldRecognize$) {
+      this.shouldRecognize$.next();
+      this.shouldRecognize$.complete();
+      console.warn('Transcription cancelled.');
+    } else {
+      console.warn('No transcription to cancel.');
+    }
+  }
 
-  //   pipeline(
-  //     'automatic-speech-recognition',
-  //     'Xenova/whisper-tiny',
-  //     this.SPEECH_RECOGNITION_CONFIG
-  //   )
-  //     .then(async (automaticSpeechRecognition) => {
-  //       const sampleRate = audioBuffer.sampleRate; // Normalmente 16000 para Whisper
-  //       const chunkSamples = Math.floor(chunkSizeSec * sampleRate);
-  //       const totalChunks = Math.ceil(audioBuffer.duration / chunkSizeSec);
+  resetTranscription() {
+    this.audioChunks = []; // Limpiar el array de chunks
+    this.recognitionSubscription?.unsubscribe(); // Desuscribirse
+    this.recognitionSubscription = undefined;
+  }
 
-  //       const audioData = this.getAudioData(audioBuffer);
-  //       const numChannels = audioData.length; // Detecta si es mono o estéreo
+  private reproduceAudio(float32Array: Float32Array) {
+    const audioContext = new AudioContext();
+    const buffer = audioContext.createBuffer(1, float32Array.length, 16000);
+    buffer.copyToChannel(float32Array, 0);
 
-  //       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-  //         const startSample = chunkIndex * chunkSamples;
-  //         const endSample = Math.min(
-  //           startSample + chunkSamples,
-  //           audioData[0].length
-  //         );
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
 
-  //         const chunk = new Float32Array(endSample - startSample);
-
-  //         // 📌 Convertir a mono promediando canales
-  //         for (let ch = 0; ch < numChannels; ch++) {
-  //           const channelChunk = audioData[ch].subarray(startSample, endSample);
-  //           for (let i = 0; i < channelChunk.length; i++) {
-  //             chunk[i] += channelChunk[i]; // Suma cada canal
-  //           }
-  //         }
-  //         for (let i = 0; i < chunk.length; i++) {
-  //           chunk[i] /= numChannels; // Saca el promedio
-  //         }
-
-  //         const startTime = new Date().getTime();
-  //         console.log(
-  //           `Procesando chunk ${chunkIndex + 1} de ${totalChunks}...`
-  //         );
-
-  //         try {
-  //           const config = {
-  //             language: 'es', // Forzar reconocimiento en español
-  //             task: 'transcribe',
-  //             return_timestamps: 'word',
-  //             stride_length_s: 1, // Evita cortes bruscos en el audio
-  //             // chunk_length_s: 5, // Procesa en fragmentos de 5 segundos
-  //           } as AutomaticSpeechRecognitionConfig;
-
-  //           const result = (await automaticSpeechRecognition(
-  //             chunk,
-  //             config
-  //           )) as AutomaticSpeechRecognitionOutput;
-
-  //           await new Promise((resolve) => setTimeout(resolve, 1));
-  //           subject.next(result.text); // Emitir resultado parcial
-
-  //           // from(automaticSpeechRecognition(chunk, config))
-  //           //   .pipe(
-  //           //     tap((result: any) => {
-  //           //       subject.next(result.text);
-  //           //     })
-  //           //   )
-  //           //   .subscribe();
-
-  //           const endTime = new Date().getTime();
-  //           // 📌 Calcular la diferencia (en milisegundos)
-  //           const elapsedTime = endTime - startTime;
-
-  //           console.log(
-  //             `La función tardó ${elapsedTime / 1000} segundos en ejecutarse.`
-  //           );
-  //         } catch (error) {
-  //           console.error(`Error en chunk ${chunkIndex + 1}:`, error);
-  //         }
-  //       }
-  //       subject.complete(); // Indica que la transcripción ha terminado
-  //     })
-  //     .catch((error) => {
-  //       console.error('Error cargando el modelo de Whisper:', error);
-  //     });
-
-  //   return subject.asObservable();
-  // }
-
-  // getAudioData(audioBuffer: AudioBuffer): Float32Array[] {
-  //   return Array.from(
-  //     { length: audioBuffer.numberOfChannels },
-  //     (_, i) => audioBuffer.getChannelData(i) // Extrae cada canal
-  //   );
-  // }
-
-  // private async loadWavFile(url: string): Promise<Float32Array> {
-  //   // 1️⃣ Descargar el archivo WAV desde la URL
-  //   const response = await fetch(url);
-  //   const arrayBuffer = await response.arrayBuffer();
-
-  //   this.reproduceAudio(new Blob([arrayBuffer]));
-
-  //   // 2️⃣ Crear un AudioContext y decodificar el audio
-  //   const audioContext = new AudioContext({ sampleRate: 16000 }); // Whisper usa 16kHz
-  //   const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-  //   return audioBuffer.getChannelData(0);
-  // }
+    source.start();
+  }
 }
