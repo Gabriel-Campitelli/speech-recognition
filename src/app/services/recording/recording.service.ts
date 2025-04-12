@@ -122,49 +122,7 @@ export class RecordingService {
           source.connect(this.analyserNode);
         }
 
-        // Dibujar onda en el canvas
-        this.analyserNode.fftSize = 2048; // Tamaño de la FFT
-        const bufferLength = this.analyserNode.frequencyBinCount;
-        const dataArray = new Uint8Array(bufferLength);
-
-        const canvas = document.getElementById('waveform') as HTMLCanvasElement;
-        const canvasCtx = canvas.getContext('2d');
-
-        const draw = () => {
-          requestAnimationFrame(draw);
-
-          if (!this.analyserNode || !canvasCtx) return;
-          this.analyserNode.getByteTimeDomainData(dataArray);
-
-          canvasCtx.fillStyle = 'rgb(240, 240, 240)';
-          canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-
-          canvasCtx.lineWidth = 2;
-          canvasCtx.strokeStyle = 'rgb(0, 0, 0)';
-          canvasCtx.beginPath();
-
-          const sliceWidth = (canvas.width * 1.0) / bufferLength;
-          let x = 0;
-
-          for (let i = 0; i < bufferLength; i++) {
-            const v = dataArray[i] / 128.0; // Convertir el valor a un rango [0, 2]
-            const y = (v * canvas.height) / 2;
-
-            if (i === 0) {
-              canvasCtx.moveTo(x, y);
-            } else {
-              canvasCtx.lineTo(x, y);
-            }
-
-            x += sliceWidth;
-          }
-
-          canvasCtx.lineTo(canvas.width, canvas.height / 2);
-          canvasCtx.stroke();
-        };
-
-        draw();
-        // Dibujar onda en el canvas
+        this.drawCanvas();
 
         this.stereoAudioRecorder = new StereoAudioRecorder(stream, {
           mimeType: this.MIME_TYPE,
@@ -360,5 +318,54 @@ export class RecordingService {
     }
 
     return new Blob([buffer], { type: 'audio/wav' });
+  }
+
+  private drawCanvas(): void {
+    if (this.analyserNode === null) {
+      return;
+    }
+
+    this.analyserNode.fftSize = 2048;
+    const bufferLength = this.analyserNode.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const canvas = document.getElementById('waveform') as HTMLCanvasElement;
+    const canvasCtx = canvas.getContext('2d');
+
+    const draw = () => {
+      requestAnimationFrame(draw);
+
+      if (!this.analyserNode || !canvasCtx) return;
+      this.analyserNode.getByteTimeDomainData(dataArray);
+
+      canvasCtx.fillStyle = 'rgb(240, 240, 240)';
+      canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+      canvasCtx.lineWidth = 2;
+      canvasCtx.strokeStyle = 'rgb(0, 0, 0)';
+      canvasCtx.beginPath();
+
+      const sliceWidth = (canvas.width * 1.0) / bufferLength;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        const v = dataArray[i] / 128.0; // Convertir el valor a un rango [0, 2]
+        const y = (v * canvas.height) / 2;
+
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+
+        x += sliceWidth;
+      }
+
+      canvasCtx.lineTo(canvas.width, canvas.height / 2);
+      canvasCtx.stroke();
+    };
+
+    draw();
+    // Dibujar onda en el canvas
   }
 }
