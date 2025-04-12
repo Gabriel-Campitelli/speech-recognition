@@ -1,9 +1,11 @@
 <div class="container">
   <div>
-    <button [disabled]="true">Execute recognition</button>
-
-    <button [disabled]="isRecording" (click)="startRecording()">Start recording</button>
-    <button [disabled]="!isRecording" (click)="stopRecording()">Stop recording</button>
+    <button [disabled]="isRecording" (click)="startRecording()">
+      Start recording
+    </button>
+    <button [disabled]="!isRecording" (click)="stopRecording()">
+      Stop recording
+    </button>
   </div>
 
   <canvas id="waveform"></canvas>
@@ -14,8 +16,4 @@
       {{ oldPartialText }}
     </span>
   </p>
-
-  <div [ngStyle]="{ color: 'lightgreen', 'font-weight': 'bold' }">
-    Ahora necesito eliminar el ruido en el recording.service.ts
-  </div>
 </div>

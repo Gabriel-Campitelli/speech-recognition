@@ -7,11 +7,11 @@ import { SpeechRecognitionService } from './../speech-recognition/speech-recogni
   providedIn: 'root',
 })
 export class RecordingService {
-  private readonly SAMPLE_RATE = 16000;
+  public recordedChunk$ = new Subject<Float32Array>();
+
   private stereoAudioRecorder!: StereoAudioRecorder;
   private audioContext: AudioContext | null = null;
   private analyserNode: AnalyserNode | null = null;
-  private silenceThreshold = 0.015;
   private silenceTimer: any;
   private isRecording = false;
   private processingChunks$: ReplaySubject<boolean> = new ReplaySubject(1);
@@ -19,9 +19,13 @@ export class RecordingService {
   private chunksToProcess: Array<Blob> = [];
   private audioChunks: Blob[] = [];
   private blobsToProcess$ = new Subject<Blob>();
-  private readonly MIME_TYPE = 'audio/wav';
 
-  public recordedChunk$ = new Subject<Float32Array>();
+  private readonly MIME_TYPE = 'audio/wav';
+  private readonly SAMPLE_RATE = 16000;
+  private readonly SILENCE_DURATION_MS = 100;
+  private readonly SILENCE_THRESHOLD_FFT = 0.015;
+  private readonly SILENCE_THRESHOLD_PCM = 0.01;
+  private readonly SILENCE_DURATION_SAMPLES = 800;
 
   constructor(private speechRecognitionService: SpeechRecognitionService) {}
 
@@ -39,7 +43,7 @@ export class RecordingService {
           const averageAmplitude =
             dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
 
-          if (averageAmplitude < this.silenceThreshold * 255) {
+          if (averageAmplitude < this.SILENCE_THRESHOLD_FFT * 255) {
             console.warn('SILENCE DETECTED');
 
             if (this.silenceTimer === null) {
@@ -54,7 +58,7 @@ export class RecordingService {
                 }
 
                 this.silenceTimer = null;
-              }, 100); // Tiempo de silencio de 100ms
+              }, this.SILENCE_DURATION_MS);
             }
           } else {
             console.warn('RECORDING CHUNK');
@@ -199,21 +203,18 @@ export class RecordingService {
   }
 
   private getAudioWithoutSilence(audioData: Float32Array): Float32Array {
-    const threshold = 0.01; // Umbral de silencio
-    const silenceDurationThreshold = 800; // Duración mínima del silencio (en muestras)
-
     let start = null;
     let end = null;
     const newData: number[] = [];
 
     // Recorremos los datos de audio y buscamos segmentos de silencio
     for (let i = 0; i < audioData.length; i++) {
-      if (Math.abs(audioData[i]) < threshold) {
+      if (Math.abs(audioData[i]) < this.SILENCE_THRESHOLD_PCM) {
         if (start === null) start = i; // Detectamos el inicio del silencio
       } else {
         if (start !== null) {
           end = i; // Detectamos el final del silencio
-          if (end - start > silenceDurationThreshold) {
+          if (end - start > this.SILENCE_DURATION_SAMPLES) {
             // Si el silencio es lo suficientemente largo, lo eliminamos
             continue;
           }
