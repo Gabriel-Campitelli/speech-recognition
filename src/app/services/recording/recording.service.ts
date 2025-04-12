@@ -8,12 +8,10 @@ import { SpeechRecognitionService } from './../speech-recognition/speech-recogni
 })
 export class RecordingService {
   private readonly SAMPLE_RATE = 16000;
-  private readonly CHUNK_EMIT_INTERVAL = 2000; // Intervalo de 1.5 segundos
   private stereoAudioRecorder!: StereoAudioRecorder;
   private audioContext: AudioContext | null = null;
   private analyserNode: AnalyserNode | null = null;
   private silenceThreshold = 0.015;
-  private silenceDuration = 200;
   private silenceTimer: any;
   private isRecording = false;
   private processingChunks$: ReplaySubject<boolean> = new ReplaySubject(1);
@@ -42,31 +40,26 @@ export class RecordingService {
             dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
 
           if (averageAmplitude < this.silenceThreshold * 255) {
-            console.warn('Silencio detectado');
+            console.warn('SILENCE DETECTED');
 
             if (this.silenceTimer === null) {
-              // Si no hay un temporizador en ejecución, se establece uno para 100ms
               this.silenceTimer = setTimeout(async () => {
                 if (this.audioChunks.length > 0) {
                   const wavBlob = await this.convertChunksToWAV(
                     this.audioChunks
                   );
 
-                  // Emitir el Blob concatenado y resetear los chunks
                   this.emitChunk(wavBlob);
                   this.audioChunks = [];
                 }
 
-                // Resetear el temporizador de silencio
                 this.silenceTimer = null;
               }, 100); // Tiempo de silencio de 100ms
             }
           } else {
-            console.warn('Grabando chunk');
-            // Audio no está en silencio, agregamos el blob al array de chunks
+            console.warn('RECORDING CHUNK');
             this.audioChunks.push(blob);
 
-            // Limpiar el temporizador si había silencio previamente
             if (this.silenceTimer !== null) {
               clearTimeout(this.silenceTimer);
               this.silenceTimer = null;
@@ -83,7 +76,7 @@ export class RecordingService {
           const arrayBuffer = await blob.arrayBuffer();
 
           if (arrayBuffer.byteLength === 0) {
-            return null; // Retorna null o un valor vacío para seguir procesando
+            return null;
           }
 
           const audioBuffer = await this.audioContext?.decodeAudioData(
@@ -91,7 +84,7 @@ export class RecordingService {
           );
 
           if (!audioBuffer) {
-            throw new Error('Error al decodificar el audio');
+            throw new Error('ERROR DECODING THE AUDIO');
           }
 
           const resampledBuffer = await this.resampleAudio(audioBuffer);
@@ -99,11 +92,9 @@ export class RecordingService {
           const newFloat32Array = this.getAudioWithoutSilence(float32Array);
 
           if (newFloat32Array.length === 0) {
-            return null; // Retorna null si el nuevo array está vacío
+            return null;
           }
 
-          // console.log(float32Array);
-          // this.reproduceAudio(float32Array);
           this.recordedChunk$.next(float32Array);
 
           return blob;
@@ -117,7 +108,7 @@ export class RecordingService {
           );
         },
         error: (error) => {
-          console.error('Error al procesar el chunk:', error);
+          console.error('ERROR PROCESSING THE CHUNK: ', error);
         },
       });
 
@@ -191,19 +182,15 @@ export class RecordingService {
   stopRecording() {
     this.speechRecognitionService.cancelTranscription();
     if (this.isRecording && this.stereoAudioRecorder) {
-      // Modificar bandera
       this.isRecording = false;
       if (this.silenceTimer) clearTimeout(this.silenceTimer);
 
-      // Cerrar el AudioContext
       this.audioContext?.close();
       this.audioContext = null;
 
-      // Cancelar el procesado de chunks
       this.processingChunks$.next(true);
       this.processingChunks$.complete();
 
-      // Dejar de grabar
       this.stereoAudioRecorder.stop(() => {});
     }
   }
@@ -285,7 +272,7 @@ export class RecordingService {
 
     // Si el audio es completamente vacío, retornamos un array vacío
     if (newData.length === 0) {
-      console.warn('El audio resultante está vacío.');
+      console.warn('THE AUDIO IS EMPTY');
       return new Float32Array(0);
     }
 
