@@ -2,11 +2,13 @@ import { Component, OnInit } from '@angular/core';
 import { SpeechRecognitionService } from '../services/speech-recognition/speech-recognition.service';
 import { tap } from 'rxjs/operators';
 import { RecordingService } from '../services/recording/recording.service';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
+  imports: [CommonModule]
 })
 export class AppComponent implements OnInit {
   title = 'speech-recognition-poc';

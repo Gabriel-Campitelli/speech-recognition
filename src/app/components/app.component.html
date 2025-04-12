@@ -1,17 +1,21 @@
 <div class="container">
-  <button [disabled]="true">
-    Execute recognition
-  </button>
+  <div>
+    <button [disabled]="true">Execute recognition</button>
 
-  <button (click)="startRecording()">Start recording</button>
-  <button (click)="stopRecording()">Stop recording</button>
+    <button [disabled]="isRecording" (click)="startRecording()">Start recording</button>
+    <button [disabled]="!isRecording" (click)="stopRecording()">Stop recording</button>
+  </div>
 
-  <p>
+  <canvas id="waveform"></canvas>
+
+  <p [style.color]="'white'">
     {{ transcription }}
     <span style="color: red">
       {{ oldPartialText }}
     </span>
   </p>
 
-  Ahora lo que tengo que hacer es intentar ir traduciendo mientras se va grabando el audio
+  <div [ngStyle]="{ color: 'lightgreen', 'font-weight': 'bold' }">
+    Ahora necesito eliminar el ruido en el recording.service.ts
+  </div>
 </div>
