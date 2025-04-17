@@ -7,7 +7,7 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "start:railway": "node server.js"
+    "start:railway": "npm run build && node server.js"
   },
   "private": true,
   "dependencies": {
