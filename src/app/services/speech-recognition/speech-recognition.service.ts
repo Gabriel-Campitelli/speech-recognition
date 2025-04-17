@@ -50,7 +50,7 @@ export class SpeechRecognitionService {
 
   getResult(audioBuffer: Float32Array) {
     if (!audioBuffer) {
-      const url = '../../../assets/salvador-sample.wav';
+      // const url = '../../../assets/salvador-sample.wav';
       // audioBuffer = await this.loadWavFile(url);
       // return throwError('Error');
     }
