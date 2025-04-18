@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
 import { concatMap, Subject, takeUntil, ReplaySubject, filter } from 'rxjs';
-import { StereoAudioRecorder } from 'recordrtc';
 import { SpeechRecognitionService } from './../speech-recognition/speech-recognition.service';
 
 @Injectable({
@@ -9,7 +8,7 @@ import { SpeechRecognitionService } from './../speech-recognition/speech-recogni
 export class RecordingService {
   public recordedChunk$ = new Subject<Float32Array>();
 
-  private stereoAudioRecorder!: StereoAudioRecorder;
+  private stereoAudioRecorder!: any;
   private audioContext: AudioContext | null = null;
   private analyserNode: AnalyserNode | null = null;
   private silenceTimer: any;
@@ -118,7 +117,7 @@ export class RecordingService {
 
     navigator.mediaDevices
       .getUserMedia({ audio: true })
-      .then((stream: MediaStream) => {
+      .then(async (stream: MediaStream) => {
         if (!this.audioContext || !this.analyserNode) {
           const context = this.createAudioContext();
           const source = context.createMediaStreamSource(stream);
@@ -127,6 +126,8 @@ export class RecordingService {
         }
 
         this.drawCanvas();
+
+        const { StereoAudioRecorder } = await import('recordrtc'); // ← IMPORTACIÓN DINÁMICA
 
         this.stereoAudioRecorder = new StereoAudioRecorder(stream, {
           mimeType: this.MIME_TYPE,
