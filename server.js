@@ -2,10 +2,12 @@ const express = require("express");
 const path = require("path");
 const app = express();
 
-app.use(express.static(__dirname + "dist/speech-recognition-poc"));
+app.use(express.static(__dirname + "/dist/speech-recognition-poc/browser"));
 
 app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "dist/speech-recognition-poc/index.html"));
+  res.sendFile(
+    path.join(__dirname, "/dist/speech-recognition-poc/browser/index.html")
+  );
 });
 
 const PORT = process.env.PORT || 8080;
