@@ -14,16 +14,16 @@ describe('AppComponent', () => {
     expect(app).toBeTruthy();
   });
 
-  it(`should have the 'speech-recognition-poc' title`, () => {
+  it(`should have the 'escuchapp' title`, () => {
     const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance;
-    expect(app.title).toEqual('speech-recognition-poc');
+    expect(app.title).toEqual('escuchapp');
   });
 
   it('should render title', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, speech-recognition-poc');
+    expect(compiled.querySelector('h1')?.textContent).toContain('Hello, escuchapp');
   });
 });

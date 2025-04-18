@@ -1,6 +1,6 @@
 {
-  "name": "speech-recognition-poc",
-  "short_name": "speech-recognition-poc",
+  "name": "escuchapp",
+  "short_name": "escuchapp",
   "theme_color": "#1976d2",
   "background_color": "#fafafa",
   "display": "standalone",

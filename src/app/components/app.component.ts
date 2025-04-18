@@ -11,7 +11,7 @@ import { CommonModule } from '@angular/common';
   imports: [CommonModule]
 })
 export class AppComponent implements OnInit {
-  title = 'speech-recognition-poc';
+  title = 'EscuchApp';
   transcription = '';
   oldPartialText = '';
   isRecording: boolean = false;
