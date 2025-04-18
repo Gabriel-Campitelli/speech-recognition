@@ -27,6 +27,8 @@ app.use(express.static(__dirname + "/dist/speech-recognition-poc"));
 app.get("*", (req, res) => {
   res.sendFile(__dirname + "/dist/speech-recognition-poc/index.html");
 });
-app.listen(port, async () => {
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, async () => {
   console.log(`API Gateway running in port ${port}!`);
 });
