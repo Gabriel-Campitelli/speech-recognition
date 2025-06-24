@@ -2,9 +2,7 @@ import { Injectable } from '@angular/core';
 import {
   pipeline,
   AutomaticSpeechRecognitionOutput,
-  AutomaticSpeechRecognitionConfig,
-  PretrainedOptions,
-  env,
+  // env,
 } from '@huggingface/transformers';
 import { Subject, from, takeUntil, concatMap, Subscription } from 'rxjs';
 
@@ -16,17 +14,15 @@ import { Subject, from, takeUntil, concatMap, Subscription } from 'rxjs';
 })
 export class SpeechRecognitionService {
   private readonly SRS_CACHE = '../../../assets/transform-models';
-  private readonly SPEECH_RECOGNITION_SERVICE_CONFIG: PretrainedOptions = {
+  private readonly SPEECH_RECOGNITION_SERVICE_CONFIG = {
     // cache_dir: this.SRS_CACHE,
     // local_files_only: true,
   };
   private readonly AUTOMATIC_SR_CONFIG = {
     language: 'es', // Forzar reconocimiento en español
     task: 'transcribe',
-    return_timestamps: 'word',
     stride_length_s: 1, // Evita cortes bruscos en el audio
     chunk_length_s: 5, // Procesa en fragmentos de 5 segundos
-    device: 'webgpu',
   };
 
   private shouldRecognize$: Subject<void> = new Subject();
@@ -44,8 +40,8 @@ export class SpeechRecognitionService {
       // Initialize only once
       this.recognitionPipeline = await pipeline(
         'automatic-speech-recognition',
-        'onnx-community/whisper-base',
-        this.SPEECH_RECOGNITION_SERVICE_CONFIG
+        'onnx-community/whisper-tiny'
+        // this.SPEECH_RECOGNITION_SERVICE_CONFIG
       );
     }
   }
