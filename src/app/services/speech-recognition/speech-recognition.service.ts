@@ -8,24 +8,26 @@ import {
 } from '@huggingface/transformers';
 import { Subject, from, takeUntil, concatMap, Subscription } from 'rxjs';
 
+/** SRS stands for Speech Recognition Service */
+/** SR stands for Speech Recognition */
+
 @Injectable({
   providedIn: 'root',
 })
 export class SpeechRecognitionService {
-  private readonly WHISPER_TINY_MODEL_URL =
-    '../../..assets/transform-models/whisper-tiny';
+  private readonly SRS_CACHE = '../../../assets/transform-models';
   private readonly SPEECH_RECOGNITION_SERVICE_CONFIG: PretrainedOptions = {
-    cache_dir: this.WHISPER_TINY_MODEL_URL,
-    local_files_only: true,
+    // cache_dir: this.SRS_CACHE,
+    // local_files_only: true,
   };
-  private readonly AUTOMATIC_SPEECH_RECOGNITION_CONFIG: AutomaticSpeechRecognitionConfig =
-    {
-      language: 'es', // Forzar reconocimiento en español
-      task: 'transcribe',
-      return_timestamps: 'word',
-      stride_length_s: 1, // Evita cortes bruscos en el audio
-      chunk_length_s: 5, // Procesa en fragmentos de 5 segundos
-    } as AutomaticSpeechRecognitionConfig;
+  private readonly AUTOMATIC_SR_CONFIG = {
+    language: 'es', // Forzar reconocimiento en español
+    task: 'transcribe',
+    return_timestamps: 'word',
+    stride_length_s: 1, // Evita cortes bruscos en el audio
+    chunk_length_s: 5, // Procesa en fragmentos de 5 segundos
+    device: 'webgpu',
+  };
 
   private shouldRecognize$: Subject<void> = new Subject();
   private recognitionPipeline: any; // Store the pipeline instance
@@ -33,8 +35,8 @@ export class SpeechRecognitionService {
   recognitionSubscription: Subscription | undefined;
 
   constructor() {
-    env.localModelPath = '/assets/transform-models/';
-    env.allowLocalModels = true;
+    // env.localModelPath = '/assets/transform-models/';
+    // env.allowLocalModels = true;
   }
 
   private async initializePipeline() {
@@ -42,7 +44,7 @@ export class SpeechRecognitionService {
       // Initialize only once
       this.recognitionPipeline = await pipeline(
         'automatic-speech-recognition',
-        'Xenova/whisper-tiny',
+        'onnx-community/whisper-base',
         this.SPEECH_RECOGNITION_SERVICE_CONFIG
       );
     }
@@ -87,7 +89,7 @@ export class SpeechRecognitionService {
             const result = (await this.recognitionPipeline(
               // Use the stored pipeline
               audioChunk,
-              this.AUTOMATIC_SPEECH_RECOGNITION_CONFIG
+              this.AUTOMATIC_SR_CONFIG
             )) as AutomaticSpeechRecognitionOutput;
 
             console.warn('Chunk processing finished');

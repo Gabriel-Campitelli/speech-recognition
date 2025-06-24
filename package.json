@@ -7,7 +7,9 @@
     "build": "ng build --configuration production",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "start:railway": "npm run build && node server.js"
+    "start:railway": "npm run build && node server.js",
+    "clean": "rm -rf dist && rm -rf node_modules && npm cache clean --force",
+    "reinstall:run": "rm -rf dist && rm -rf node_modules && npm cache clean --force && npm i && ng serve"
   },
   "engines": {
     "node": "18.x"
@@ -23,7 +25,7 @@
     "@angular/platform-browser-dynamic": "^19.1.0",
     "@angular/router": "^19.1.0",
     "@angular/service-worker": "^19.1.0",
-    "@huggingface/transformers": "^3.3.2",
+    "@huggingface/transformers": "^3.5.2",
     "recordrtc": "^5.6.2",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
