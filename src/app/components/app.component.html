@@ -1,19 +1,38 @@
 <div class="container">
-  <div>
-    <button [disabled]="isRecording" (click)="startRecording()">
-      Start recording
+  <h1>{{ title }}</h1>
+
+  <div class="controls">
+    <button (click)="startRecording()" [disabled]="isRecording" class="btn btn-start">
+      {{ isRecording ? 'Grabando...' : 'Iniciar Grabación' }}
     </button>
-    <button [disabled]="!isRecording" (click)="stopRecording()">
-      Stop recording
+
+    <button (click)="stopRecording()" [disabled]="!isRecording" class="btn btn-stop">
+      Detener
+    </button>
+
+    <button (click)="clearTranscription()" class="btn btn-clear">
+      Limpiar
     </button>
   </div>
 
-  <canvas id="waveform"></canvas>
+  <div class="status">
+    <div class="indicator" [class.active]="isRecording">🎤</div>
+    <div class="indicator" [class.active]="isProcessing">⚡</div>
+  </div>
 
-  <p [style.color]="'white'">
-    {{ transcription }}
-    <span style="color: red">
-      {{ oldPartialText }}
-    </span>
-  </p>
+  <canvas id="waveform" width="400" height="100"></canvas>
+
+  <div class="transcription-container">
+    <!-- Transcripción en tiempo real (parcial) -->
+    <div class="partial-transcription" *ngIf="partialTranscription">
+      <small>Transcribiendo...</small>
+      <p class="partial-text">{{ partialTranscription }}</p>
+    </div>
+
+    <!-- Transcripción final -->
+    <div class="final-transcription">
+      <h3>Transcripción:</h3>
+      <p class="final-text">{{ finalTranscription || 'Presiona "Iniciar Grabación" para comenzar...' }}</p>
+    </div>
+  </div>
 </div>
