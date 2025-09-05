@@ -4,10 +4,10 @@ import { RecordingService } from '../services/recording/recording.service';
 import { CommonModule } from '@angular/common';
 import { Subject, takeUntil } from 'rxjs';
 import {
-  AutomaticSpeechRecognitionArgs,
-  InferenceClient,
-} from '@huggingface/inference';
-import { environment } from '../../environments/environment';
+  AudioPipelineInputs,
+  AutomaticSpeechRecognitionOutput,
+  pipeline,
+} from '@huggingface/transformers';
 
 @Component({
   selector: 'app-root',
@@ -18,7 +18,6 @@ import { environment } from '../../environments/environment';
 export class AppComponent implements OnInit, OnDestroy {
   title = 'EscuchApp';
   LANGUAGE = 'es';
-  private HUGGINGFACE_ACCESS_TOKEN = environment.huggingFaceAccessToken;
 
   // Transcripciones separadas para mejor UX
   partialTranscription = '';
@@ -26,8 +25,6 @@ export class AppComponent implements OnInit, OnDestroy {
 
   isRecording = false;
   isProcessing = false;
-
-  private MODEL_NAME = 'openai/whisper-large-v3';
 
   private destroy$ = new Subject<void>();
 
@@ -37,22 +34,24 @@ export class AppComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    const client = new InferenceClient(this.HUGGINGFACE_ACCESS_TOKEN);
-
     this.recordingService.audioChunk$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (wavBlob) => {
         const startTime = new Date();
 
-        const args: AutomaticSpeechRecognitionArgs = {
-          model: this.MODEL_NAME,
-          provider: 'hf-inference',
+        // Pipeline (esto sirve para usar huggingface de manera OFFLINE)
+        const transcriber = await pipeline(
+          'automatic-speech-recognition',
+          'Xenova/whisper-base'
+        );
+        const audioPipelineInputs: AudioPipelineInputs =
+          URL.createObjectURL(wavBlob);
+        const response = (await transcriber(audioPipelineInputs, {
           language: this.LANGUAGE,
-          inputs: wavBlob,
-        };
+        })) as AutomaticSpeechRecognitionOutput;
 
-        // esto sirve para usar huggingface de manera ONLINE
-        const response = await client.automaticSpeechRecognition(args);
+        console.log('Respuesta de HuggingFace:', response);
+
         const finishTime = new Date();
 
         console.log(
