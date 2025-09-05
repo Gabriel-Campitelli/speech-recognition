@@ -7,13 +7,16 @@ import { Subject, BehaviorSubject } from 'rxjs';
 export class SpeechRecognitionService {
   private worker: Worker | null = null;
   private chunkCounter = 0;
-  private processingChunks = new Map<number, { timestamp: number, audioData: Float32Array }>();
-  
+  private processingChunks = new Map<
+    number,
+    { timestamp: number; audioData: Float32Array }
+  >();
+
   // Subjects para diferentes tipos de transcripción
   public partialTranscription$ = new Subject<string>(); // Transcripción parcial en tiempo real
   public finalTranscription$ = new Subject<string>(); // Transcripción final consolidada
   public isProcessing$ = new BehaviorSubject<boolean>(false);
-  
+
   private readonly AUTOMATIC_SR_CONFIG = {
     language: 'es',
     task: 'transcribe',
@@ -27,20 +30,23 @@ export class SpeechRecognitionService {
 
   private initializeWorker() {
     if (typeof Worker !== 'undefined') {
-      this.worker = new Worker(new URL('../../../assets/speech.worker.js', import.meta.url), {
-        type: 'module'
-      });
-      
+      this.worker = new Worker(
+        new URL('../../speech.worker.ts', import.meta.url),
+        {
+          type: 'module',
+        }
+      );
+
       this.worker.onmessage = (e) => {
         const { id, success, text, error, timestamp } = e.data;
-        
+
         if (success && text && text.trim()) {
           // Emitir transcripción parcial inmediatamente
           this.partialTranscription$.next(text.trim());
-          
+
           // Limpiar chunk procesado
           this.processingChunks.delete(id);
-          
+
           // Actualizar estado de procesamiento
           this.isProcessing$.next(this.processingChunks.size > 0);
         } else if (error) {
@@ -49,7 +55,7 @@ export class SpeechRecognitionService {
           this.isProcessing$.next(this.processingChunks.size > 0);
         }
       };
-      
+
       this.worker.onerror = (error) => {
         console.error('Worker error:', error);
         this.isProcessing$.next(false);
@@ -64,23 +70,23 @@ export class SpeechRecognitionService {
 
     // Asignar ID único al chunk
     const chunkId = ++this.chunkCounter;
-    
+
     // Guardar referencia del chunk que se está procesando
     this.processingChunks.set(chunkId, {
       timestamp: Date.now(),
-      audioData: audioBuffer
+      audioData: audioBuffer,
     });
-    
+
     // Actualizar estado de procesamiento
     this.isProcessing$.next(true);
-    
+
     // Enviar chunk al worker para procesamiento asíncrono
     this.worker.postMessage({
       id: chunkId,
       audioData: audioBuffer,
-      config: this.AUTOMATIC_SR_CONFIG
+      config: this.AUTOMATIC_SR_CONFIG,
     });
-    
+
     // Limpiar chunks antiguos (más de 10 segundos)
     this.cleanupOldChunks();
   }
@@ -88,13 +94,13 @@ export class SpeechRecognitionService {
   private cleanupOldChunks() {
     const now = Date.now();
     const maxAge = 10000; // 10 segundos
-    
+
     for (const [id, chunk] of this.processingChunks.entries()) {
       if (now - chunk.timestamp > maxAge) {
         this.processingChunks.delete(id);
       }
     }
-    
+
     this.isProcessing$.next(this.processingChunks.size > 0);
   }
 

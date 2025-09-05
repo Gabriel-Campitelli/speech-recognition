@@ -5,9 +5,10 @@ import { CommonModule } from '@angular/common';
 import { Subject, takeUntil } from 'rxjs';
 import {
   AudioPipelineInputs,
+  AutomaticSpeechRecognitionConfig,
   AutomaticSpeechRecognitionOutput,
   pipeline,
-} from '@huggingface/transformers';
+} from '@xenova/transformers';
 
 @Component({
   selector: 'app-root',
@@ -18,6 +19,7 @@ import {
 export class AppComponent implements OnInit, OnDestroy {
   title = 'EscuchApp';
   LANGUAGE = 'es';
+  private readonly MODEL_PATH = '/xenova-whisper-base';
 
   // Transcripciones separadas para mejor UX
   partialTranscription = '';
@@ -42,13 +44,17 @@ export class AppComponent implements OnInit, OnDestroy {
         // Pipeline (esto sirve para usar huggingface de manera OFFLINE)
         const transcriber = await pipeline(
           'automatic-speech-recognition',
-          'Xenova/whisper-base'
+          this.MODEL_PATH,
+          {
+            local_files_only: true,
+          }
         );
         const audioPipelineInputs: AudioPipelineInputs =
           URL.createObjectURL(wavBlob);
         const response = (await transcriber(audioPipelineInputs, {
           language: this.LANGUAGE,
-        })) as AutomaticSpeechRecognitionOutput;
+          task: 'transcribe',
+        } as AutomaticSpeechRecognitionConfig)) as AutomaticSpeechRecognitionOutput;
 
         console.log('Respuesta de HuggingFace:', response);
 
@@ -68,11 +74,11 @@ export class AppComponent implements OnInit, OnDestroy {
         }, 10);
       });
 
-    this.speechRecognitionService.isProcessing$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe((processing) => {
-        this.isProcessing = processing;
-      });
+    // this.speechRecognitionService.isProcessing$
+    //   .pipe(takeUntil(this.destroy$))
+    //   .subscribe((processing) => {
+    //     this.isProcessing = processing;
+    //   });
   }
 
   // private async playAudioBlob(blob: Blob): Promise<void> {
@@ -117,7 +123,7 @@ export class AppComponent implements OnInit, OnDestroy {
   stopRecording(): void {
     this.isRecording = false;
     this.recordingService.stopRecording();
-    this.speechRecognitionService.cancelTranscription();
+    // this.speechRecognitionService.cancelTranscription();
   }
 
   clearTranscription(): void {
@@ -128,6 +134,6 @@ export class AppComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-    this.speechRecognitionService.destroy();
+    // this.speechRecognitionService.destroy();
   }
 }
