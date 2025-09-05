@@ -3,23 +3,30 @@ import { SpeechRecognitionService } from '../services/speech-recognition/speech-
 import { RecordingService } from '../services/recording/recording.service';
 import { CommonModule } from '@angular/common';
 import { Subject, takeUntil } from 'rxjs';
+import {
+  AutomaticSpeechRecognitionArgs,
+  InferenceClient,
+} from '@huggingface/inference';
+import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
   styleUrl: './app.component.scss',
-  imports: [CommonModule]
+  imports: [CommonModule],
 })
 export class AppComponent implements OnInit, OnDestroy {
   title = 'EscuchApp';
-  
+  LANGUAGE = 'es';
+  private HUGGINGFACE_ACCESS_TOKEN = environment.huggingFaceAccessToken;
+
   // Transcripciones separadas para mejor UX
   partialTranscription = '';
   finalTranscription = '';
-  
+
   isRecording = false;
   isProcessing = false;
-  
+
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -28,26 +35,37 @@ export class AppComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
-    // Suscribirse a chunks de audio
+    const client = new InferenceClient(this.HUGGINGFACE_ACCESS_TOKEN);
+
     this.recordingService.audioChunk$
       .pipe(takeUntil(this.destroy$))
-      .subscribe((audioChunk) => {
-        this.speechRecognitionService.processAudioChunk(audioChunk);
-      });
+      .subscribe(async (wavBlob) => {
+        const startTime = new Date();
 
-    // Suscribirse a transcripciones parciales (tiempo real)
-    this.speechRecognitionService.partialTranscription$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe((text) => {
-        this.partialTranscription = text;
+        const args: AutomaticSpeechRecognitionArgs = {
+          model: 'openai/whisper-large-v3',
+          provider: 'hf-inference',
+          language: this.LANGUAGE,
+          inputs: wavBlob,
+        };
+
+        const response = await client.automaticSpeechRecognition(args);
+        const finishTime = new Date();
+
+        console.log(
+          `Transcripción recibida en ${
+            finishTime.getTime() - startTime.getTime()
+          } ms`
+        );
+
+        this.partialTranscription = response.text;
         // Agregar a transcripción final después de un delay
         setTimeout(() => {
-          this.finalTranscription += ' ' + text;
+          this.finalTranscription += ' ' + response.text;
           this.partialTranscription = '';
-        }, 1000);
+        }, 10);
       });
 
-    // Suscribirse al estado de procesamiento
     this.speechRecognitionService.isProcessing$
       .pipe(takeUntil(this.destroy$))
       .subscribe((processing) => {

@@ -6,7 +6,7 @@ import { StereoAudioRecorder } from 'recordrtc';
   providedIn: 'root',
 })
 export class RecordingService {
-  public audioChunk$ = new Subject<Float32Array>();
+  public audioChunk$ = new Subject<Blob>();
 
   private stereoAudioRecorder!: StereoAudioRecorder;
   private audioContext: AudioContext | null = null;
@@ -14,17 +14,16 @@ export class RecordingService {
   private isRecording = false;
   private stopRecording$ = new Subject<void>();
 
-  // Buffer circular para acumular audio
-  private audioBuffer: Float32Array = new Float32Array(0);
-  private readonly BUFFER_SIZE = 16000 * 2; // 2 segundos de audio a 16kHz
-  private readonly CHUNK_SIZE = 16000 * 1; // 1 segundo de audio
+  private audioBlobs: Blob[] = [];
+  private readonly MAX_BLOBS = 8; // ~2 segundos (250ms * 8)
+  private readonly MIN_BLOBS_FOR_CHUNK = 4; // ~1 segundo
 
   private readonly SAMPLE_RATE = 16000;
   private readonly SILENCE_THRESHOLD = 0.01;
 
   startRecording(): void {
     this.stopRecording$ = new Subject<void>();
-    this.audioBuffer = new Float32Array(0);
+    this.audioBlobs = [];
 
     navigator.mediaDevices
       .getUserMedia({
@@ -61,77 +60,66 @@ export class RecordingService {
     this.stereoAudioRecorder = new StereoAudioRecorder(stream, {
       mimeType: 'audio/wav',
       numberOfAudioChannels: 1,
-      timeSlice: 250, // Chunks más frecuentes (250ms)
+      timeSlice: 250,
       ondataavailable: (blob) => this.processAudioBlob(blob),
     });
   }
 
   private startContinuousProcessing() {
-    // Procesar chunks cada 500ms para mayor fluidez
     interval(500)
       .pipe(takeUntil(this.stopRecording$))
       .subscribe(() => {
-        if (this.audioBuffer.length >= this.CHUNK_SIZE) {
+        if (this.audioBlobs.length >= this.MIN_BLOBS_FOR_CHUNK) {
           this.emitAudioChunk();
         }
       });
   }
 
   private async processAudioBlob(blob: Blob) {
-    if (!this.audioContext || blob.size === 0) return;
+    if (blob.size === 0) return;
 
-    try {
-      const arrayBuffer = await blob.arrayBuffer();
-      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
-      const float32Data = this.extractMonoAudio(audioBuffer);
+    // 👈 Solo verificar silencio si quieres (opcional)
+    const hasAudio = await this.blobHasAudio(blob);
+    if (!hasAudio) return;
 
-      // Agregar al buffer circular
-      this.addToBuffer(float32Data);
-    } catch (error) {
-      console.error('Error processing audio blob:', error);
-    }
-  }
+    // Agregar al buffer circular de Blobs
+    this.audioBlobs.push(blob);
 
-  private extractMonoAudio(audioBuffer: AudioBuffer): Float32Array {
-    const channelData = audioBuffer.getChannelData(0);
-    return new Float32Array(channelData);
-  }
-
-  private addToBuffer(newData: Float32Array) {
-    // Crear nuevo buffer combinado
-    const combinedLength = this.audioBuffer.length + newData.length;
-    const newBuffer = new Float32Array(combinedLength);
-
-    newBuffer.set(this.audioBuffer);
-    newBuffer.set(newData, this.audioBuffer.length);
-
-    // Mantener solo los últimos BUFFER_SIZE samples
-    if (combinedLength > this.BUFFER_SIZE) {
-      const startIndex = combinedLength - this.BUFFER_SIZE;
-      this.audioBuffer = newBuffer.slice(startIndex);
-    } else {
-      this.audioBuffer = newBuffer;
+    // Mantener solo los últimos MAX_BLOBS
+    if (this.audioBlobs.length > this.MAX_BLOBS) {
+      this.audioBlobs.shift(); // Remover el más antiguo
     }
   }
 
   private emitAudioChunk() {
-    if (this.audioBuffer.length < this.CHUNK_SIZE) return;
+    if (this.audioBlobs.length < this.MIN_BLOBS_FOR_CHUNK) return;
 
-    // Tomar chunk del final del buffer
-    const chunk = this.audioBuffer.slice(-this.CHUNK_SIZE);
+    // Combinar los últimos blobs en uno solo
+    const chunksToSend = this.audioBlobs.slice(-this.MIN_BLOBS_FOR_CHUNK);
+    const combinedBlob = new Blob(chunksToSend, { type: 'audio/wav' });
 
-    // Verificar que no sea solo silencio
-    if (this.hasAudio(chunk)) {
-      this.audioChunk$.next(chunk);
-    }
+    this.audioChunk$.next(combinedBlob);
+
+    this.audioBlobs = this.audioBlobs.slice(this.MIN_BLOBS_FOR_CHUNK);
   }
 
-  private hasAudio(audioData: Float32Array): boolean {
-    const rms = Math.sqrt(
-      audioData.reduce((sum, sample) => sum + sample * sample, 0) /
-        audioData.length
-    );
-    return rms > this.SILENCE_THRESHOLD;
+  // 👈 Función opcional para detectar silencio en Blob
+  private async blobHasAudio(blob: Blob): Promise<boolean> {
+    if (!this.audioContext) return true; // Si no hay contexto, asumir que tiene audio
+
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+      const channelData = audioBuffer.getChannelData(0);
+
+      const rms = Math.sqrt(
+        channelData.reduce((sum, sample) => sum + sample * sample, 0) /
+          channelData.length
+      );
+      return rms > this.SILENCE_THRESHOLD;
+    } catch {
+      return true; // En caso de error, asumir que tiene audio
+    }
   }
 
   stopRecording() {
