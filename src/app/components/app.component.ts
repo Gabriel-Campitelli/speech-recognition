@@ -40,6 +40,9 @@ export class AppComponent implements OnInit, OnDestroy {
     this.recordingService.audioChunk$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (wavBlob) => {
+        // 🎧 Reproducir el audio
+        // await this.playAudioBlob(wavBlob);
+
         const startTime = new Date();
 
         const args: AutomaticSpeechRecognitionArgs = {
@@ -71,6 +74,38 @@ export class AppComponent implements OnInit, OnDestroy {
       .subscribe((processing) => {
         this.isProcessing = processing;
       });
+  }
+
+  private async playAudioBlob(blob: Blob): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        // Crear URL del blob
+        const audioUrl = URL.createObjectURL(blob);
+
+        // Crear elemento de audio
+        const audio = new Audio(audioUrl);
+
+        // Configurar eventos
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl); // Limpiar memoria
+          console.log('🎧 Reproducción terminada');
+          resolve();
+        };
+
+        audio.onerror = (error) => {
+          URL.revokeObjectURL(audioUrl);
+          console.error('❌ Error reproduciendo audio:', error);
+          reject(error);
+        };
+
+        // Reproducir
+        console.log('🎧 Reproduciendo audio...');
+        audio.play().catch(reject);
+      } catch (error) {
+        console.error('❌ Error creando audio:', error);
+        reject(error);
+      }
+    });
   }
 
   startRecording(): void {
