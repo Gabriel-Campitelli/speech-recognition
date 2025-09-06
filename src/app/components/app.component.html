@@ -2,11 +2,19 @@
   <h1>{{ title }}</h1>
 
   <div class="controls">
-    <button (click)="startRecording()" [disabled]="isRecording" class="btn btn-start">
-      {{ isRecording ? 'Grabando...' : 'Iniciar Grabación' }}
+    <button
+      (click)="startRecording()"
+      [disabled]="isRecording"
+      class="btn btn-start"
+    >
+      {{ isRecording ? "Grabando..." : "Iniciar Grabación" }}
     </button>
 
-    <button (click)="stopRecording()" [disabled]="!isRecording" class="btn btn-stop">
+    <button
+      (click)="stopRecording()"
+      [disabled]="!isRecording"
+      class="btn btn-stop"
+    >
       Detener
     </button>
 
@@ -27,12 +35,19 @@
     <div class="partial-transcription" *ngIf="partialTranscription">
       <small>Transcribiendo...</small>
       <p class="partial-text">{{ partialTranscription }}</p>
+      <p class="partial-text-time" style="color: red">
+        Transcripción recibida en {{ partialTranscriptionTime }} ms
+      </p>
     </div>
 
     <!-- Transcripción final -->
     <div class="final-transcription">
-      <h3>Transcripción:</h3>
-      <p class="final-text">{{ finalTranscription || 'Presiona "Iniciar Grabación" para comenzar...' }}</p>
+      <h3>Transcripción completa:</h3>
+      @if(finalTranscription) {
+      <p class="final-text" [innerHTML]="finalTranscription"></p>
+      } @else {
+      <p class="final-text">'Presiona "Iniciar Grabación" para comenzar...'</p>
+      }
     </div>
   </div>
 </div>

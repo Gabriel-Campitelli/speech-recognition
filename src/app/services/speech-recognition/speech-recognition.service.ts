@@ -1,119 +1,75 @@
 import { Injectable } from '@angular/core';
-import { Subject, BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
+import { read_audio } from '@xenova/transformers';
 
-@Injectable({
-  providedIn: 'root',
-})
+export interface PartialTranscription {
+  text: string;
+  time: number;
+}
+
+@Injectable({ providedIn: 'root' })
 export class SpeechRecognitionService {
-  private worker: Worker | null = null;
-  private chunkCounter = 0;
-  private processingChunks = new Map<
-    number,
-    { timestamp: number; audioData: Float32Array }
-  >();
+  private worker: Worker | undefined;
 
-  // Subjects para diferentes tipos de transcripción
-  public partialTranscription$ = new Subject<string>(); // Transcripción parcial en tiempo real
-  public finalTranscription$ = new Subject<string>(); // Transcripción final consolidada
+  public partialTranscription$ = new Subject<PartialTranscription>();
+  public finalTranscription$ = new Subject<string>();
+
   public isProcessing$ = new BehaviorSubject<boolean>(false);
-
-  private readonly AUTOMATIC_SR_CONFIG = {
-    language: 'es',
-    task: 'transcribe',
-    stride_length_s: 0.5, // Reducido para mayor fluidez
-    chunk_length_s: 3, // Chunks más pequeños para mayor velocidad
-  };
+  private chunkCounter = 0;
 
   constructor() {
-    this.initializeWorker();
-  }
-
-  private initializeWorker() {
     if (typeof Worker !== 'undefined') {
       this.worker = new Worker(
-        new URL('../../speech.worker.ts', import.meta.url),
+        new URL('../../speech.worker', import.meta.url),
         {
           type: 'module',
         }
       );
 
-      this.worker.onmessage = (e) => {
-        const { id, success, text, error, timestamp } = e.data;
+      this.worker.onmessage = (event) => {
+        const { id, success, text, error, time } = event.data;
 
-        if (success && text && text.trim()) {
-          // Emitir transcripción parcial inmediatamente
-          this.partialTranscription$.next(text.trim());
-
-          // Limpiar chunk procesado
-          this.processingChunks.delete(id);
-
-          // Actualizar estado de procesamiento
-          this.isProcessing$.next(this.processingChunks.size > 0);
-        } else if (error) {
-          console.error('Worker error:', error);
-          this.processingChunks.delete(id);
-          this.isProcessing$.next(this.processingChunks.size > 0);
+        if (success) {
+          this.partialTranscription$.next({ text, time });
+          setTimeout(() => {
+            this.finalTranscription$.next(text);
+          }, 10);
+        } else {
+          console.error('[Worker] Error:', error);
         }
       };
 
-      this.worker.onerror = (error) => {
-        console.error('Worker error:', error);
-        this.isProcessing$.next(false);
+      this.worker.onerror = (err) => {
+        console.error('[Worker] Worker error', err);
       };
     }
   }
 
-  processAudioChunk(audioBuffer: Float32Array) {
-    if (!this.worker || !audioBuffer || audioBuffer.length === 0) {
-      return;
-    }
-
-    // Asignar ID único al chunk
-    const chunkId = ++this.chunkCounter;
-
-    // Guardar referencia del chunk que se está procesando
-    this.processingChunks.set(chunkId, {
-      timestamp: Date.now(),
-      audioData: audioBuffer,
-    });
-
-    // Actualizar estado de procesamiento
+  async processAudioBlob(blob: Blob) {
+    if (!this.worker || !blob.size) return;
     this.isProcessing$.next(true);
 
-    // Enviar chunk al worker para procesamiento asíncrono
+    const audioBlob = await read_audio(URL.createObjectURL(blob), 16000);
+
+    // ===▶ Seguir con el worker
     this.worker.postMessage({
-      id: chunkId,
-      audioData: audioBuffer,
-      config: this.AUTOMATIC_SR_CONFIG,
+      id: ++this.chunkCounter,
+      audioData: audioBlob,
     });
-
-    // Limpiar chunks antiguos (más de 10 segundos)
-    this.cleanupOldChunks();
-  }
-
-  private cleanupOldChunks() {
-    const now = Date.now();
-    const maxAge = 10000; // 10 segundos
-
-    for (const [id, chunk] of this.processingChunks.entries()) {
-      if (now - chunk.timestamp > maxAge) {
-        this.processingChunks.delete(id);
-      }
-    }
-
-    this.isProcessing$.next(this.processingChunks.size > 0);
-  }
-
-  cancelTranscription() {
-    this.processingChunks.clear();
-    this.isProcessing$.next(false);
   }
 
   destroy() {
+    console.log('[Service] Cleaning up SpeechRecognitionService');
+
+    // Terminate worker
     if (this.worker) {
       this.worker.terminate();
-      this.worker = null;
+      this.worker = undefined;
     }
-    this.processingChunks.clear();
+
+    // Complete subjects
+    this.partialTranscription$.complete();
+    this.finalTranscription$.complete();
+    this.isProcessing$.complete();
   }
 }

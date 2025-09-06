@@ -1,14 +1,11 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
-import { SpeechRecognitionService } from '../services/speech-recognition/speech-recognition.service';
+import {
+  PartialTranscription,
+  SpeechRecognitionService,
+} from '../services/speech-recognition/speech-recognition.service';
 import { RecordingService } from '../services/recording/recording.service';
 import { CommonModule } from '@angular/common';
 import { Subject, takeUntil } from 'rxjs';
-import {
-  AudioPipelineInputs,
-  AutomaticSpeechRecognitionConfig,
-  AutomaticSpeechRecognitionOutput,
-  pipeline,
-} from '@xenova/transformers';
 
 @Component({
   selector: 'app-root',
@@ -18,11 +15,9 @@ import {
 })
 export class AppComponent implements OnInit, OnDestroy {
   title = 'EscuchApp';
-  LANGUAGE = 'es';
-  private readonly MODEL_PATH = '/xenova-whisper-base';
 
-  // Transcripciones separadas para mejor UX
   partialTranscription = '';
+  partialTranscriptionTime = 0;
   finalTranscription = '';
 
   isRecording = false;
@@ -39,79 +34,22 @@ export class AppComponent implements OnInit, OnDestroy {
     this.recordingService.audioChunk$
       .pipe(takeUntil(this.destroy$))
       .subscribe(async (wavBlob) => {
-        const startTime = new Date();
-
-        // Pipeline (esto sirve para usar huggingface de manera OFFLINE)
-        const transcriber = await pipeline(
-          'automatic-speech-recognition',
-          this.MODEL_PATH,
-          {
-            local_files_only: true,
-          }
-        );
-        const audioPipelineInputs: AudioPipelineInputs =
-          URL.createObjectURL(wavBlob);
-        const response = (await transcriber(audioPipelineInputs, {
-          language: this.LANGUAGE,
-          task: 'transcribe',
-        } as AutomaticSpeechRecognitionConfig)) as AutomaticSpeechRecognitionOutput;
-
-        console.log('Respuesta de HuggingFace:', response);
-
-        const finishTime = new Date();
-
-        console.log(
-          `Transcripción recibida en ${
-            finishTime.getTime() - startTime.getTime()
-          } ms`
-        );
-
-        this.partialTranscription = response.text;
-        // Agregar a transcripción final después de un delay
-        setTimeout(() => {
-          this.finalTranscription += ' ' + response.text;
-          this.partialTranscription = '';
-        }, 10);
+        this.speechRecognitionService.processAudioBlob(wavBlob);
       });
 
-    // this.speechRecognitionService.isProcessing$
-    //   .pipe(takeUntil(this.destroy$))
-    //   .subscribe((processing) => {
-    //     this.isProcessing = processing;
-    //   });
+    this.speechRecognitionService.partialTranscription$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((partialTranscription: PartialTranscription) => {
+        this.partialTranscription = partialTranscription.text;
+        this.partialTranscriptionTime = partialTranscription.time;
+      });
+
+    this.speechRecognitionService.finalTranscription$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((text) => {
+        this.finalTranscription += `<br>` + text;
+      });
   }
-
-  // private async playAudioBlob(blob: Blob): Promise<void> {
-  //   return new Promise((resolve, reject) => {
-  //     try {
-  //       // Crear URL del blob
-  //       const audioUrl = URL.createObjectURL(blob);
-
-  //       // Crear elemento de audio
-  //       const audio = new Audio(audioUrl);
-
-  //       // Configurar eventos
-  //       audio.onended = () => {
-  //         URL.revokeObjectURL(audioUrl); // Limpiar memoria
-  //         console.log('🎧 Reproducción terminada');
-  //         resolve();
-  //       };
-
-  //       audio.onerror = (error) => {
-  //         URL.revokeObjectURL(audioUrl);
-  //         console.error('❌ Error reproduciendo audio:', error);
-  //         reject(error);
-  //       };
-
-  //       // Reproducir
-  //       console.log('🎧 Reproduciendo audio...');
-  //       audio.play().catch(reject);
-  //     } catch (error) {
-  //       console.error('❌ Error creando audio:', error);
-  //       reject(error);
-  //     }
-  //   });
-  // }
 
   startRecording(): void {
     this.isRecording = true;
@@ -134,6 +72,6 @@ export class AppComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
-    // this.speechRecognitionService.destroy();
+    this.speechRecognitionService.destroy();
   }
 }

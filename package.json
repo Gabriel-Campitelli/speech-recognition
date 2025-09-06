@@ -7,9 +7,8 @@
     "build": "ng build --configuration production",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "start:railway": "npm run build && node server.js",
     "clean": "rm -rf dist && rm -rf node_modules && npm cache clean --force && rm package-lock.json",
-    "reinstall:run": "rm -rf dist && rm -rf node_modules && npm cache clean --force && npm i && ng serve"
+    "reinstall:run": "npm run clean && npm i && npm run build && ng serve"
   },
   "engines": {
     "node": "18.x"
